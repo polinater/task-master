@@ -1,0 +1,18 @@
+{
+  "name": "linear-attio-google-tasks-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-way sync of Linear issues (by team) and Attio tasks (by assignee) into Google Tasks, running as an hourly Vercel cron.",
+  "scripts": {
+    "auth": "node scripts/google-auth.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@vercel/node": "^5.0.0",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.38.0"
+  }
+}
