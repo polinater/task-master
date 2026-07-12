@@ -5,13 +5,13 @@ const API_BASE = "https://api.attio.com/v2";
 
 interface AttioTask {
   id: { workspace_id: string; task_id: string };
-  content_plaintext: string;
+  content_plaintext: string | null;
   deadline_at: string | null;
   is_completed: boolean;
   completed_at: string | null;
-  linked_records: { target_object_id: string; target_record_id: string }[];
-  assignees: { referenced_actor_type: string; referenced_actor_id: string }[];
-  created_by_actor: { type: string; id: string | null };
+  linked_records?: { target_object_id: string; target_record_id: string }[];
+  assignees?: { referenced_actor_type: string; referenced_actor_id: string }[];
+  created_by_actor?: { type: string; id: string | null };
   created_at: string;
 }
 
@@ -47,19 +47,16 @@ async function getData<T>(path: string): Promise<T> {
   return ((await res.json()) as { data: T }).data;
 }
 
+/** List tasks matching `query`, paging past Attio's 500-per-request cap. */
 async function listTasks(query: Record<string, string>): Promise<AttioTask[]> {
-  const params = new URLSearchParams({ limit: "500", ...query });
-  const res = await fetch(`${API_BASE}/tasks?${params}`, {
-    headers: {
-      Authorization: `Bearer ${env.attioApiKey()}`,
-      "Content-Type": "application/json",
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`Attio API request failed (${res.status}): ${await res.text()}`);
+  const limit = 500;
+  const tasks: AttioTask[] = [];
+  for (let offset = 0; ; offset += limit) {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset), ...query });
+    const page = (await getData<AttioTask[]>(`/tasks?${params}`)) ?? [];
+    tasks.push(...page);
+    if (page.length < limit) return tasks;
   }
-  const json = (await res.json()) as { data: AttioTask[] };
-  return json.data ?? [];
 }
 
 function firstValue(values: Record<string, unknown[]>, keys: string[], fields: string[]): string | null {
@@ -88,14 +85,35 @@ function recordSummary(record: AttioRecord, noun: string): Omit<LinkedContext, "
   return { name, details };
 }
 
-async function linkedContext(task: AttioTask): Promise<LinkedContext[]> {
-  return Promise.all(task.linked_records.map(async (linked) => {
-    const object = await getData<AttioObject>(`/objects/${linked.target_object_id}`);
-    const record = await getData<AttioRecord>(
-      `/objects/${encodeURIComponent(object.api_slug)}/records/${linked.target_record_id}`,
-    );
-    return { noun: object.singular_noun, url: record.web_url, ...recordSummary(record, object.singular_noun) };
-  }));
+/**
+ * Enrich a task with a summary of each linked record. A record that can't be
+ * fetched (deleted, or the token lost access) is skipped rather than failing
+ * the whole sync run. `objectCache` dedupes /objects lookups across all tasks.
+ */
+async function linkedContext(
+  task: AttioTask,
+  objectCache: Map<string, Promise<AttioObject>>,
+): Promise<LinkedContext[]> {
+  const contexts = await Promise.all(
+    (task.linked_records ?? []).map(async (linked) => {
+      try {
+        let object = objectCache.get(linked.target_object_id);
+        if (!object) {
+          object = getData<AttioObject>(`/objects/${encodeURIComponent(linked.target_object_id)}`);
+          objectCache.set(linked.target_object_id, object);
+        }
+        const { api_slug, singular_noun } = await object;
+        const record = await getData<AttioRecord>(
+          `/objects/${encodeURIComponent(api_slug)}/records/${encodeURIComponent(linked.target_record_id)}`,
+        );
+        return { noun: singular_noun, url: record.web_url, ...recordSummary(record, singular_noun) };
+      } catch (err) {
+        console.warn(`Skipping linked record ${linked.target_record_id} on task ${task.id.task_id}:`, err);
+        return null;
+      }
+    }),
+  );
+  return contexts.filter((context): context is LinkedContext => context !== null);
 }
 
 function memberLabel(member: AttioMember | undefined): string | null {
@@ -121,10 +139,11 @@ function toSourceItem(
   const links: { label: string; url: string }[] = [];
   if (slug) links.push({ label: "Attio task", url: `https://app.attio.com/${slug}/tasks` });
 
-  const assignees = task.assignees
+  const assignees = (task.assignees ?? [])
     .map((assignee) => memberLabel(members.get(assignee.referenced_actor_id)))
     .filter((value): value is string => Boolean(value));
-  const creator = task.created_by_actor.id ? memberLabel(members.get(task.created_by_actor.id)) : null;
+  const creatorId = task.created_by_actor?.id;
+  const creator = creatorId ? memberLabel(members.get(creatorId)) : null;
   const extraNotes = [
     `Status: ${task.is_completed ? "Completed" : "Open"}`,
     assignees.length ? `Assignee: ${assignees.join(", ")}` : null,
@@ -141,7 +160,8 @@ function toSourceItem(
       if (record.details.length) extraNotes.push(`Details: ${record.details.join(" · ")}`);
     }
   }
-  if (task.content_plaintext.trim()) extraNotes.push("", "Task details", task.content_plaintext.trim());
+  const details = task.content_plaintext?.trim();
+  if (details) extraNotes.push("", "Task details", details);
 
   return {
     key: `attio:${task.id.task_id}`,
@@ -175,6 +195,7 @@ export async function fetchAttioItems(): Promise<SourceItem[]> {
 
   const tasks = [...open, ...recentlyCompleted];
   const members = new Map(memberList.map((member) => [member.id.workspace_member_id, member]));
-  const related = await Promise.all(tasks.map(linkedContext));
+  const objectCache = new Map<string, Promise<AttioObject>>();
+  const related = await Promise.all(tasks.map((task) => linkedContext(task, objectCache)));
   return tasks.map((task, index) => toSourceItem(task, members, related[index]));
 }
