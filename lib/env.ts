@@ -14,7 +14,12 @@ function optional(name: string, fallback = ""): string {
 export const env = {
   // Linear
   linearApiKey: () => required("LINEAR_API_KEY"),
-  linearTeamId: () => required("LINEAR_TEAM_ID"),
+  // One or more team UUIDs (comma-separated), e.g. "<uuid1>,<uuid2>".
+  linearTeamIds: () =>
+    required("LINEAR_TEAM_IDS")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
 
   // Attio
   attioApiKey: () => required("ATTIO_API_KEY"),
@@ -27,8 +32,9 @@ export const env = {
   googleClientId: () => required("GOOGLE_CLIENT_ID"),
   googleClientSecret: () => required("GOOGLE_CLIENT_SECRET"),
   googleRefreshToken: () => required("GOOGLE_REFRESH_TOKEN"),
-  // "@default" is the account's primary task list.
-  googleTasklistId: () => optional("GOOGLE_TASKLIST_ID", "@default"),
+  // Target Google Tasks list titles per source. Auto-created if missing.
+  linearTasklist: () => optional("LINEAR_TASKLIST", "Dev"),
+  attioTasklist: () => optional("ATTIO_TASKLIST", "Sales"),
 
   // Upstash Redis — the mapping database. Provisioned via the Vercel
   // Marketplace, which injects these two vars automatically.

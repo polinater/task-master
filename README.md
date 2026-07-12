@@ -39,7 +39,7 @@ npm install
 ### 2. Linear
 
 - **`LINEAR_API_KEY`** — Linear → Settings → Security & access → Personal API keys.
-- **`LINEAR_TEAM_ID`** — the team's UUID (not the `CORE` key). Find it in the team settings URL, or run:
+- **`LINEAR_TEAM_IDS`** — one or more team UUIDs, comma-separated (not the `CORE` key). Find them in the team settings URL, or run:
   ```bash
   curl -s https://api.linear.app/graphql -H "Authorization: $LINEAR_API_KEY" \
     -H "Content-Type: application/json" \
@@ -76,7 +76,8 @@ Google auto-expires refresh tokens after **7 days _only while the OAuth consent 
    GOOGLE_REFRESH_TOKEN=1//0g...
    ```
 5. Set **`GOOGLE_CLIENT_ID`**, **`GOOGLE_CLIENT_SECRET`**, and **`GOOGLE_REFRESH_TOKEN`** as env vars.
-   Optionally set **`GOOGLE_TASKLIST_ID`** (defaults to `@default`, the primary list).
+
+**Routing to lists:** Linear issues sync into the **`LINEAR_TASKLIST`** list (default `Dev`) and Attio tasks into **`ATTIO_TASKLIST`** (default `Sales`). Both lists are **created automatically** if they don't exist. Any other list you keep (e.g. `Admin`) is never touched — the sync only manages tasks it created.
 
 ### 5. Upstash Redis (mapping database)
 

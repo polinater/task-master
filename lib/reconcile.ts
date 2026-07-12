@@ -15,6 +15,12 @@ function contentHash(title: string, notes: string, due: string): string {
   return createHash("md5").update(`${title}\n${notes}\n${due}`).digest("hex");
 }
 
+export interface PlanEntry {
+  action: "create" | "complete" | "update";
+  list: string;
+  title: string;
+}
+
 export interface SyncResult {
   created: number;
   completed: number;
@@ -22,25 +28,38 @@ export interface SyncResult {
   skipped: number;
   /** Google task was gone (deleted by hand); we recreated or dropped it. */
   healed: number;
+  /** Populated only on a dry run: the actions that would be taken. */
+  plan?: PlanEntry[];
 }
 
 export async function reconcile(
   items: SourceItem[],
-  google: GoogleTasksClient,
+  google: GoogleTasksClient | null,
   store: SyncStore,
+  opts: { dryRun?: boolean } = {},
 ): Promise<SyncResult> {
+  const dryRun = opts.dryRun ?? false;
   const existing = await store.all();
   const result: SyncResult = { created: 0, completed: 0, updated: 0, skipped: 0, healed: 0 };
+  const plan: PlanEntry[] = [];
 
   const now = () => new Date().toISOString();
 
   const create = async (item: SourceItem, notes: string, hash: string) => {
-    const task = await google.insert({
+    if (dryRun) return;
+    const tasklistId = await google!.resolveList(item.list);
+    const task = await google!.insert(tasklistId, {
       title: item.title,
       notes,
       due: item.due ?? undefined,
     });
-    await store.set(item.key, { googleTaskId: task.id, done: false, hash, updatedAt: now() });
+    await store.set(item.key, {
+      googleTaskId: task.id,
+      tasklistId,
+      done: false,
+      hash,
+      updatedAt: now(),
+    });
   };
 
   for (const item of items) {
@@ -56,6 +75,7 @@ export async function reconcile(
       }
       await create(item, notes, hash);
       result.created++;
+      plan.push({ action: "create", list: item.list, title: item.title });
       continue;
     }
 
@@ -65,8 +85,13 @@ export async function reconcile(
         result.skipped++;
         continue;
       }
+      if (dryRun) {
+        result.completed++;
+        plan.push({ action: "complete", list: item.list, title: item.title });
+        continue;
+      }
       try {
-        await google.complete(record.googleTaskId);
+        await google!.complete(record.tasklistId, record.googleTaskId);
         await store.set(item.key, { ...record, done: true, updatedAt: now() });
         result.completed++;
       } catch (err) {
@@ -85,8 +110,13 @@ export async function reconcile(
       result.skipped++;
       continue;
     }
+    if (dryRun) {
+      result.updated++;
+      plan.push({ action: "update", list: item.list, title: item.title });
+      continue;
+    }
     try {
-      await google.patch(record.googleTaskId, {
+      await google!.patch(record.tasklistId, record.googleTaskId, {
         title: item.title,
         notes,
         due: item.due ?? undefined,
@@ -103,5 +133,6 @@ export async function reconcile(
     }
   }
 
+  if (dryRun) result.plan = plan;
   return result;
 }

@@ -7,6 +7,8 @@ export interface SourceItem {
   key: string;
   /** Google task title (already includes the identifier prefix where available). */
   title: string;
+  /** Target Google Tasks list title, e.g. "Dev" or "Sales". */
+  list: string;
   /** Human identifier, e.g. "CORE-123". Linear only; null for Attio. */
   identifier: string | null;
   /** Whether the source item is done (completed or canceled). */

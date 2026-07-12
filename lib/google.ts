@@ -57,10 +57,10 @@ async function getAccessToken(): Promise<string> {
 }
 
 export class GoogleTasksClient {
-  constructor(
-    private readonly token: string,
-    private readonly tasklist: string,
-  ) {}
+  /** Cache of task-list title → id, resolved lazily. */
+  private listCache: Map<string, string> | null = null;
+
+  constructor(private readonly token: string) {}
 
   private async call(path: string, init: RequestInit = {}): Promise<any> {
     const res = await fetch(`${API_BASE}${path}`, {
@@ -82,26 +82,46 @@ export class GoogleTasksClient {
     return res.json();
   }
 
-  private list() {
-    return `/lists/${encodeURIComponent(this.tasklist)}/tasks`;
+  /** Resolve a task-list title to its id, creating the list if it doesn't exist. */
+  async resolveList(title: string): Promise<string> {
+    if (!this.listCache) {
+      const data = await this.call("/users/@me/lists?maxResults=100");
+      this.listCache = new Map<string, string>(
+        (data.items ?? []).map((l: { id: string; title: string }) => [l.title, l.id]),
+      );
+    }
+    const existing = this.listCache.get(title);
+    if (existing) return existing;
+
+    const created = await this.call("/users/@me/lists", {
+      method: "POST",
+      body: JSON.stringify({ title }),
+    });
+    this.listCache.set(title, created.id);
+    return created.id;
   }
 
-  async insert(task: TaskWrite): Promise<GoogleTask> {
-    return this.call(this.list(), {
+  private taskPath(tasklistId: string, taskId?: string): string {
+    const base = `/lists/${encodeURIComponent(tasklistId)}/tasks`;
+    return taskId ? `${base}/${encodeURIComponent(taskId)}` : base;
+  }
+
+  async insert(tasklistId: string, task: TaskWrite): Promise<GoogleTask> {
+    return this.call(this.taskPath(tasklistId), {
       method: "POST",
       body: JSON.stringify({ ...task, status: "needsAction" }),
     });
   }
 
-  async patch(id: string, fields: Partial<TaskWrite>): Promise<GoogleTask> {
-    return this.call(`${this.list()}/${encodeURIComponent(id)}`, {
+  async patch(tasklistId: string, taskId: string, fields: Partial<TaskWrite>): Promise<GoogleTask> {
+    return this.call(this.taskPath(tasklistId, taskId), {
       method: "PATCH",
       body: JSON.stringify(fields),
     });
   }
 
-  async complete(id: string): Promise<GoogleTask> {
-    return this.call(`${this.list()}/${encodeURIComponent(id)}`, {
+  async complete(tasklistId: string, taskId: string): Promise<GoogleTask> {
+    return this.call(this.taskPath(tasklistId, taskId), {
       method: "PATCH",
       body: JSON.stringify({ status: "completed" }),
     });
@@ -110,5 +130,5 @@ export class GoogleTasksClient {
 
 export async function createGoogleTasksClient(): Promise<GoogleTasksClient> {
   const token = await getAccessToken();
-  return new GoogleTasksClient(token, env.googleTasklistId());
+  return new GoogleTasksClient(token);
 }

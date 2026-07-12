@@ -42,6 +42,7 @@ function toSourceItem(task: AttioTask): SourceItem {
   return {
     key: `attio:${task.id.task_id}`,
     title,
+    list: env.attioTasklist(),
     identifier: null,
     done: task.is_completed,
     due: task.deadline_at,

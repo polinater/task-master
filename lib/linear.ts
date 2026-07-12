@@ -66,27 +66,31 @@ export async function fetchLinearItems(): Promise<SourceItem[]> {
   };
 
   const items: SourceItem[] = [];
-  let after: string | null = null;
+  const list = env.linearTasklist();
 
-  do {
-    const data = await graphql({ teamId: env.linearTeamId(), after, filter });
-    const team = data.team;
-    if (!team) throw new Error(`Linear team not found for LINEAR_TEAM_ID (got null). Check the id.`);
+  for (const teamId of env.linearTeamIds()) {
+    let after: string | null = null;
+    do {
+      const data = await graphql({ teamId, after, filter });
+      const team = data.team;
+      if (!team) throw new Error(`Linear team not found for id "${teamId}". Check LINEAR_TEAM_IDS.`);
 
-    for (const issue of team.issues.nodes as LinearIssue[]) {
-      const done = issue.state.type === "completed" || issue.state.type === "canceled";
-      items.push({
-        key: `linear:${issue.id}`,
-        title: `${issue.identifier}: ${issue.title}`,
-        identifier: issue.identifier,
-        done,
-        due: issue.dueDate ? `${issue.dueDate}T00:00:00.000Z` : null,
-        links: [{ label: "Linear issue", url: issue.url }],
-      });
-    }
+      for (const issue of team.issues.nodes as LinearIssue[]) {
+        const done = issue.state.type === "completed" || issue.state.type === "canceled";
+        items.push({
+          key: `linear:${issue.id}`,
+          title: `${issue.identifier}: ${issue.title}`,
+          list,
+          identifier: issue.identifier,
+          done,
+          due: issue.dueDate ? `${issue.dueDate}T00:00:00.000Z` : null,
+          links: [{ label: "Linear issue", url: issue.url }],
+        });
+      }
 
-    after = team.issues.pageInfo.hasNextPage ? team.issues.pageInfo.endCursor : null;
-  } while (after);
+      after = team.issues.pageInfo.hasNextPage ? team.issues.pageInfo.endCursor : null;
+    } while (after);
+  }
 
   return items;
 }

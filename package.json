@@ -4,12 +4,14 @@
   "private": true,
   "description": "One-way sync of Linear issues (by team) and Attio tasks (by assignee) into Google Tasks, running as an hourly Vercel cron.",
   "scripts": {
-    "auth": "node scripts/google-auth.mjs",
+    "auth": "node --env-file-if-exists=.env.local scripts/google-auth.mjs",
+    "dev:sync": "node --env-file=.env.local --import tsx scripts/sync-local.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@vercel/node": "^5.0.0",
+    "tsx": "^4.23.0",
     "typescript": "^5.7.0"
   },
   "dependencies": {

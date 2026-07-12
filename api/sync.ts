@@ -1,10 +1,6 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { env } from "../lib/env";
-import { fetchLinearItems } from "../lib/linear";
-import { fetchAttioItems } from "../lib/attio";
-import { createGoogleTasksClient } from "../lib/google";
-import { SyncStore } from "../lib/store";
-import { reconcile } from "../lib/reconcile";
+import { runSync } from "../lib/sync";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Guard: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` automatically
@@ -14,21 +10,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ ok: false, error: "unauthorized" });
   }
 
-  const startedAt = Date.now();
   try {
-    const [linear, attio] = await Promise.all([fetchLinearItems(), fetchAttioItems()]);
-    const google = await createGoogleTasksClient();
-    const store = new SyncStore();
-    const result = await reconcile([...linear, ...attio], google, store);
-
-    const payload = {
-      ok: true,
-      durationMs: Date.now() - startedAt,
-      fetched: { linear: linear.length, attio: attio.length },
-      result,
-    };
-    console.log("sync complete", JSON.stringify(payload));
-    return res.status(200).json(payload);
+    const summary = await runSync();
+    console.log("sync complete", JSON.stringify(summary));
+    return res.status(200).json({ ok: true, ...summary });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("sync failed", message);

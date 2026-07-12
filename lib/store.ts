@@ -9,6 +9,8 @@ import { env } from "./env";
 export interface SyncRecord {
   /** The Google task id this source item maps to. */
   googleTaskId: string;
+  /** The Google Tasks list id the task lives in (so we target the right list). */
+  tasklistId: string;
   /** Whether we've already propagated completion to Google. */
   done: boolean;
   /** Hash of the last-synced title+notes+due, so we skip no-op updates. */
