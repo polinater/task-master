@@ -122,7 +122,9 @@ export async function reconcile(
       await google!.patch(record.tasklistId, record.googleTaskId, {
         title: item.title,
         notes,
-        due: item.due ?? undefined,
+        // null (not undefined) so a due date removed at the source is cleared;
+        // undefined would be dropped from the JSON body and Google would keep it.
+        due: item.due,
       });
       await store.set(item.key, { ...record, hash, done: false, updatedAt: now() });
       result.updated++;

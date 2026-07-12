@@ -14,7 +14,8 @@ export interface GoogleTask {
 interface TaskWrite {
   title: string;
   notes?: string;
-  due?: string;
+  /** RFC 3339 due date. Explicit null in a PATCH clears an existing due date. */
+  due?: string | null;
 }
 
 export class GoogleApiError extends Error {
