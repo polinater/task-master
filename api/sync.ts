@@ -1,12 +1,19 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { env } from "../lib/env";
 import { runSync } from "../lib/sync";
 
+// Constant-time comparison; sha256 first so lengths always match.
+function equalsSecret(header: string | undefined, secret: string): boolean {
+  if (!header) return false;
+  const digest = (s: string) => createHash("sha256").update(s).digest();
+  return timingSafeEqual(digest(header), digest(`Bearer ${secret}`));
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Guard: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` automatically
-  // when CRON_SECRET is set. Also protects manual invocations.
-  const secret = env.cronSecret();
-  if (secret && req.headers.authorization !== `Bearer ${secret}`) {
+  // Guard: Vercel Cron sends `Authorization: Bearer <CRON_SECRET>` automatically.
+  // CRON_SECRET is required — without it anyone could invoke the sync.
+  if (!equalsSecret(req.headers.authorization, env.cronSecret())) {
     return res.status(401).json({ ok: false, error: "unauthorized" });
   }
 

@@ -50,6 +50,6 @@ export const env = {
   },
 
   // Shared secret Vercel Cron sends as `Authorization: Bearer <CRON_SECRET>`.
-  // Also used to guard manual invocations. Optional but recommended.
-  cronSecret: () => optional("CRON_SECRET") || undefined,
+  // Required: without it the endpoint would be publicly invokable.
+  cronSecret: () => required("CRON_SECRET"),
 };
