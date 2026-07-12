@@ -1,4 +1,5 @@
 import { env } from "./env";
+import { formatTimestamp } from "./format";
 import type { SourceItem } from "./types";
 
 const API_URL = "https://api.linear.app/graphql";
@@ -52,11 +53,6 @@ interface LinearIssue {
   labels: { nodes: { name: string }[] };
 }
 
-function dateLabel(value: string | null): string | null {
-  if (!value) return null;
-  return new Date(value).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC");
-}
-
 function linearNotes(issue: LinearIssue): string[] {
   const lines = [
     `Status: ${issue.state.name}`,
@@ -67,10 +63,10 @@ function linearNotes(issue: LinearIssue): string[] {
     issue.parent ? `Parent: ${issue.parent.identifier} — ${issue.parent.title}` : null,
     issue.labels.nodes.length ? `Labels: ${issue.labels.nodes.map((label) => label.name).join(", ")}` : null,
     issue.dueDate ? `Due: ${issue.dueDate}` : null,
-    `Created: ${dateLabel(issue.createdAt)}`,
-    `Updated: ${dateLabel(issue.updatedAt)}`,
-    issue.completedAt ? `Completed: ${dateLabel(issue.completedAt)}` : null,
-    issue.canceledAt ? `Canceled: ${dateLabel(issue.canceledAt)}` : null,
+    `Created: ${formatTimestamp(issue.createdAt)}`,
+    `Updated: ${formatTimestamp(issue.updatedAt)}`,
+    issue.completedAt ? `Completed: ${formatTimestamp(issue.completedAt)}` : null,
+    issue.canceledAt ? `Canceled: ${formatTimestamp(issue.canceledAt)}` : null,
   ].filter((line): line is string => Boolean(line));
 
   if (issue.description?.trim()) lines.push("", "Description", issue.description.trim());

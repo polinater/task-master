@@ -3,7 +3,7 @@ import { GoogleTasksClient, GoogleApiError } from "./google";
 import { SyncStore } from "./store";
 import type { SourceItem } from "./types";
 
-/** Notes contain only what you want to see: identifier + links to the source. */
+/** Render the notes body: source links first, then the source-specific detail lines. */
 function buildNotes(item: SourceItem): string {
   const lines: string[] = [];
   for (const link of item.links) lines.push(`${link.label}: ${link.url}`);
@@ -15,7 +15,7 @@ function buildNotes(item: SourceItem): string {
 }
 
 function contentHash(title: string, notes: string, due: string): string {
-  return createHash("md5").update(`${title}\n${notes}\n${due}`).digest("hex");
+  return createHash("sha256").update(`${title}\n${notes}\n${due}`).digest("hex");
 }
 
 export interface PlanEntry {
@@ -49,7 +49,6 @@ export async function reconcile(
   const now = () => new Date().toISOString();
 
   const create = async (item: SourceItem, notes: string, hash: string) => {
-    if (dryRun) return;
     const tasklistId = await google!.resolveList(item.list);
     const task = await google!.insert(tasklistId, {
       title: item.title,
@@ -76,9 +75,12 @@ export async function reconcile(
         result.skipped++; // don't create tasks that are already done
         continue;
       }
-      await create(item, notes, hash);
       result.created++;
-      plan.push({ action: "create", list: item.list, title: item.title });
+      if (dryRun) {
+        plan.push({ action: "create", list: item.list, title: item.title });
+        continue;
+      }
+      await create(item, notes, hash);
       continue;
     }
 

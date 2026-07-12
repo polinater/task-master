@@ -1,4 +1,5 @@
 import { env } from "./env";
+import { formatTimestamp } from "./format";
 import type { SourceItem } from "./types";
 
 const API_BASE = "https://api.attio.com/v2";
@@ -122,11 +123,6 @@ function memberLabel(member: AttioMember | undefined): string | null {
   return name ? `${name} (${member.email_address})` : member.email_address;
 }
 
-function formatDate(value: string | null): string | null {
-  if (!value) return null;
-  return new Date(value).toISOString().replace("T", " ").replace(/\.\d{3}Z$/, " UTC");
-}
-
 function toSourceItem(
   task: AttioTask,
   members: Map<string, AttioMember>,
@@ -148,9 +144,9 @@ function toSourceItem(
     `Status: ${task.is_completed ? "Completed" : "Open"}`,
     assignees.length ? `Assignee: ${assignees.join(", ")}` : null,
     creator ? `Created by: ${creator}` : null,
-    `Created: ${formatDate(task.created_at)}`,
-    task.deadline_at ? `Deadline: ${formatDate(task.deadline_at)}` : null,
-    task.completed_at ? `Completed: ${formatDate(task.completed_at)}` : null,
+    `Created: ${formatTimestamp(task.created_at)}`,
+    task.deadline_at ? `Deadline: ${formatTimestamp(task.deadline_at)}` : null,
+    task.completed_at ? `Completed: ${formatTimestamp(task.completed_at)}` : null,
   ].filter((line): line is string => Boolean(line));
 
   if (related.length) {
