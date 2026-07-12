@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "description": "One-way sync of Linear issues (by team) and Attio tasks (by assignee) into Google Tasks, running as an hourly Vercel cron.",
+  "license": "MIT",
+  "author": "Corey Berther",
+  "engines": {
+    "node": ">=22.9"
+  },
   "scripts": {
     "auth": "node --env-file-if-exists=.env.local scripts/google-auth.mjs",
     "dev:sync": "node --env-file=.env.local --import tsx scripts/sync-local.ts",
