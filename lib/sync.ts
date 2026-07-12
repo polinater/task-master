@@ -25,10 +25,13 @@ export async function runSync(opts: { dryRun?: boolean } = {}): Promise<SyncSumm
   const store = new SyncStore();
   const result = await reconcile([...linear, ...attio], google, store, { dryRun });
 
-  return {
+  const summary: SyncSummary = {
     dryRun,
     durationMs: Date.now() - startedAt,
     fetched: { linear: linear.length, attio: attio.length },
     result,
   };
+  // Heartbeat: stamp the outcome so "is the cron running?" is answerable from Redis.
+  if (!dryRun) await store.markRun(summary);
+  return summary;
 }

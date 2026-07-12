@@ -20,6 +20,15 @@ export interface SyncRecord {
 }
 
 const HASH_KEY = "sync:items";
+const LAST_RUN_KEY = "sync:lastRun";
+
+/** Heartbeat written after every live run — check it to see if the cron is alive. */
+export interface RunStamp {
+  at: string;
+  /** "vercel" when run by the deployed cron, "local" for dev:sync. */
+  runtime: "vercel" | "local";
+  summary: unknown;
+}
 
 export class SyncStore {
   private readonly redis: Redis;
@@ -44,5 +53,18 @@ export class SyncStore {
 
   async delete(key: string): Promise<void> {
     await this.redis.hdel(HASH_KEY, key);
+  }
+
+  async markRun(summary: unknown): Promise<void> {
+    const stamp: RunStamp = {
+      at: new Date().toISOString(),
+      runtime: process.env.VERCEL ? "vercel" : "local",
+      summary,
+    };
+    await this.redis.set(LAST_RUN_KEY, stamp);
+  }
+
+  async lastRun(): Promise<RunStamp | null> {
+    return this.redis.get<RunStamp>(LAST_RUN_KEY);
   }
 }

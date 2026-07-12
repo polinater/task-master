@@ -144,6 +144,7 @@ npm run typecheck
 - **Deletions** in the source are not propagated; the Google task simply stops being updated.
 - **Attio tasks have no public URL** in the API, so the notes link to the Attio tasks view; linked person/company records get direct links.
 - **No overlap guard.** Runs are hourly and take seconds, so overlap is unlikely — but a manual run racing the cron could double-create a task.
+- **Heartbeat:** every live run writes `sync:lastRun` in Redis (timestamp, runtime, result counts) — check it first when wondering whether the cron is running.
 - **All matching state lives in Upstash Redis** (one hash, `sync:items`). If you wipe that database, the next run treats every open item as new and recreates its Google task — it won't find the existing ones. The task notes themselves contain no sync metadata, so they're safe to edit.
 
 ## Files
