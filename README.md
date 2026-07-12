@@ -140,7 +140,7 @@ npm run typecheck
 ## Notes & limitations
 
 - **One-way only.** Changes made in Google Tasks are not pushed back. If you complete a task in Google but it's still open in Linear/Attio, the next run leaves Google as-is (it only *adds* completion, never reopens).
-- **Only actionable Linear issues sync**: states of type `unstarted`/`started`, plus issues completed/canceled within the lookback window. Backlog and triage issues are deliberately excluded until they become actionable.
+- **Only actionable Linear issues sync** by default: states of type `unstarted`/`started`, plus issues completed/canceled within the lookback window. If your todo list lives in backlog states, set `LINEAR_STATE_TYPES=unstarted,started,backlog`.
 - **Deletions** in the source are not propagated; the Google task simply stops being updated.
 - **Attio tasks have no public URL** in the API, so the notes link to the Attio tasks view; linked person/company records get direct links.
 - **No overlap guard.** Runs are hourly and take seconds, so overlap is unlikely — but a manual run racing the cron could double-create a task.

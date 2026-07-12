@@ -102,7 +102,7 @@ export async function fetchLinearItems(): Promise<SourceItem[]> {
   const since = new Date(Date.now() - env.lookbackDays() * 24 * 60 * 60 * 1000).toISOString();
   const filter = {
     or: [
-      { state: { type: { in: ["unstarted", "started"] } } },
+      { state: { type: { in: env.linearStateTypes() } } },
       { completedAt: { gt: since } },
       { canceledAt: { gt: since } },
     ],

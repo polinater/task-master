@@ -112,6 +112,27 @@ test("fetchLinearItems paginates and normalizes issues", async () => {
   );
 });
 
+test("fetchLinearItems honors LINEAR_STATE_TYPES in the issue filter", async () => {
+  process.env.LINEAR_STATE_TYPES = "unstarted, started, backlog";
+  try {
+    let capturedFilter: any;
+    await withFetch(
+      (_url, init) => {
+        capturedFilter = JSON.parse(String(init?.body)).variables.filter;
+        return {
+          body: { data: { team: { issues: { nodes: [], pageInfo: { hasNextPage: false, endCursor: null } } } } },
+        };
+      },
+      async () => {
+        await fetchLinearItems();
+        assert.deepEqual(capturedFilter.or[0].state.type.in, ["unstarted", "started", "backlog"]);
+      },
+    );
+  } finally {
+    delete process.env.LINEAR_STATE_TYPES;
+  }
+});
+
 test("fetchLinearItems fails clearly on an unknown team id", async () => {
   await withFetch(
     () => ({ body: { data: { team: null } } }),

@@ -21,6 +21,15 @@ export const env = {
       .map((s) => s.trim())
       .filter(Boolean),
 
+  // Which Linear workflow state *types* count as "open" and get synced.
+  // Closed issues (completed/canceled) are always watched within the lookback
+  // window regardless. Add "backlog" if your todo list lives in backlog states.
+  linearStateTypes: () =>
+    optional("LINEAR_STATE_TYPES", "unstarted,started")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean),
+
   // Attio
   attioApiKey: () => required("ATTIO_API_KEY"),
   // Workspace-member email or id whose tasks should be synced.
