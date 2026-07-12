@@ -8,7 +8,10 @@ function buildNotes(item: SourceItem): string {
   const lines: string[] = [];
   for (const link of item.links) lines.push(`${link.label}: ${link.url}`);
   if (item.extraNotes) lines.push(...item.extraNotes);
-  return lines.join("\n");
+  const notes = lines.join("\n");
+  // Google Tasks accepts rich plain text, but keep a safety margin below its
+  // notes limit. Preserve the beginning (source/status metadata) and mark cuts.
+  return notes.length > 7900 ? `${notes.slice(0, 7860)}\n\n[Description truncated]` : notes;
 }
 
 function contentHash(title: string, notes: string, due: string): string {
