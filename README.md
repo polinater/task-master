@@ -6,7 +6,7 @@ A lightweight, **one-way** sync that runs as an hourly [Vercel Cron](https://ver
 - **Attio** tasks assigned to a chosen **user** → Google Tasks
 - When a Linear issue or Attio task is **completed/canceled**, the matching Google task is marked **done**.
 
-Each Google task carries the source identifier (e.g. `CORE-123` for Linear) and a link back to the source in its notes — and nothing else. All mapping state (source id → Google task id) lives in a single **Upstash Redis** hash, so the task notes stay clean.
+Each Google task's notes carry a link back to the source plus a readable summary — status, assignee, description, and (for Attio) a snapshot of the linked person/company record. All mapping state (source id → Google task id) lives in a single **Upstash Redis** hash, so no sync metadata is hidden in the notes and they're safe to edit.
 
 It is intentionally not a Next.js app — just a single Vercel Function (`api/sync.ts`), a cron entry, and a Redis mapping store.
 
@@ -31,6 +31,8 @@ Each run loads the whole mapping from Redis in one round-trip, then for each sou
 ## Setup
 
 ### 1. Install
+
+Requires **Node 22.9+**.
 
 ```bash
 npm install
@@ -81,7 +83,7 @@ Google auto-expires refresh tokens after **7 days _only while the OAuth consent 
 
 ### 5. Upstash Redis (mapping database)
 
-In the Vercel dashboard → **Storage** → **Upstash** → create a **Redis** database and connect it to this project. Vercel injects **`UPSTASH_REDIS_REST_URL`** and **`UPSTASH_REDIS_REST_TOKEN`** automatically. For local dev, copy those two values into your `.env`. (You can also create the DB directly at [console.upstash.com](https://console.upstash.com/) and paste the REST URL + token.)
+In the Vercel dashboard → **Storage** → **Upstash** → create a **Redis** database and connect it to this project. Vercel injects **`UPSTASH_REDIS_REST_URL`** and **`UPSTASH_REDIS_REST_TOKEN`** automatically. For local dev, copy those two values into your `.env.local`. (You can also create the DB directly at [console.upstash.com](https://console.upstash.com/) and paste the REST URL + token.)
 
 The free tier is far more than enough — this stores one small hash keyed by source id.
 
@@ -96,7 +98,7 @@ vercel env add LINEAR_API_KEY production
 vercel deploy --prod
 ```
 
-The cron in `vercel.json` calls `GET /api/sync` every hour (`0 * * * *`). Set **`CRON_SECRET`** in your env vars — Vercel automatically sends it as `Authorization: Bearer <CRON_SECRET>`, and the endpoint rejects requests without it.
+The cron in `vercel.json` calls `GET /api/sync` every hour (`0 * * * *`). **`CRON_SECRET`** is required — Vercel automatically sends it as `Authorization: Bearer <CRON_SECRET>`, and the endpoint rejects requests without it. Generate one with `openssl rand -hex 32`.
 
 To change the frequency (e.g. 4×/day), edit `vercel.json`:
 ```json
@@ -105,8 +107,20 @@ To change the frequency (e.g. 4×/day), edit `vercel.json`:
 
 ## Testing locally
 
+Copy `.env.example` to `.env.local` and fill it in, then:
+
 ```bash
-# with a .env file populated (see .env.example), load it and hit the function:
+# Dry run — fetches from Linear/Attio and prints what it *would* do.
+# No writes to Google Tasks or Redis, and no Google credentials needed.
+npm run dev:sync -- --dry
+
+# Live run — actually creates/updates Google tasks and writes Redis.
+npm run dev:sync
+```
+
+You can also exercise the deployed endpoint shape with `vercel dev`:
+
+```bash
 vercel dev
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/sync
 ```
@@ -116,11 +130,20 @@ A successful run returns JSON like:
 { "ok": true, "fetched": { "linear": 12, "attio": 3 }, "result": { "created": 2, "completed": 1, "updated": 0, "skipped": 12, "healed": 0 } }
 ```
 
+Unit tests (no network, no credentials) and the type check:
+
+```bash
+npm test
+npm run typecheck
+```
+
 ## Notes & limitations
 
 - **One-way only.** Changes made in Google Tasks are not pushed back. If you complete a task in Google but it's still open in Linear/Attio, the next run leaves Google as-is (it only *adds* completion, never reopens).
+- **Only actionable Linear issues sync**: states of type `unstarted`/`started`, plus issues completed/canceled within the lookback window. Backlog and triage issues are deliberately excluded until they become actionable.
 - **Deletions** in the source are not propagated; the Google task simply stops being updated.
-- **Attio tasks have no public URL or short id** in the API, so the notes link to the Attio tasks view and include the raw task id as the identifier.
+- **Attio tasks have no public URL** in the API, so the notes link to the Attio tasks view; linked person/company records get direct links.
+- **No overlap guard.** Runs are hourly and take seconds, so overlap is unlikely — but a manual run racing the cron could double-create a task.
 - **All matching state lives in Upstash Redis** (one hash, `sync:items`). If you wipe that database, the next run treats every open item as new and recreates its Google task — it won't find the existing ones. The task notes themselves contain no sync metadata, so they're safe to edit.
 
 ## Files
@@ -129,9 +152,15 @@ A successful run returns JSON like:
 |------|---------|
 | `api/sync.ts` | The cron endpoint / orchestrator |
 | `lib/linear.ts` | Fetch + normalize Linear issues |
-| `lib/attio.ts` | Fetch + normalize Attio tasks |
+| `lib/attio.ts` | Fetch + normalize + enrich Attio tasks |
 | `lib/google.ts` | Google Tasks REST client + token refresh |
 | `lib/store.ts` | Upstash Redis mapping store (the database) |
 | `lib/reconcile.ts` | Create/complete/update/heal logic |
 | `scripts/google-auth.mjs` | One-time local OAuth to get the refresh token |
+| `scripts/sync-local.ts` | Run a sync (or `--dry` run) from your terminal |
+| `tests/` | Unit tests (`npm test`) — no network or credentials needed |
 | `vercel.json` | Cron schedule + function config |
+
+## License
+
+[MIT](LICENSE)
